@@ -86,10 +86,47 @@ public class TVDBCliente {
         }
 
         int tvdbId = serie.get("tvdb_id").getAsInt();
-        System.out.println("🔍 TVDB ID encontrado para '" + nombreSerie + "': " + tvdbId);
+        System.out.println("TVDB ID encontrado para '" + nombreSerie + "': " + tvdbId);
 
         return tvdbId;
     }
+
+    public String obtenerPosterPeliculaMasAntigua() throws IOException, InterruptedException {
+        // Construimos la URL para buscar películas del año específico
+        String url = "https://api4.thetvdb.com/v4/search?query=a&type=series&year=1986";
+
+        HttpRequest solicitud = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Authorization", "Bearer " + API_KEY)
+                .header("Accept", "application/json")
+                .build();
+
+        HttpResponse<String> respuesta = cliente.send(solicitud, HttpResponse.BodyHandlers.ofString());
+
+        if (respuesta.statusCode() != 200) {
+            throw new IOException("Error en la API, código de estado: " + respuesta.statusCode());
+        }
+
+
+        JsonObject jsonRespuesta = JsonParser.parseString(respuesta.body()).getAsJsonObject();
+        JsonArray resultados = jsonRespuesta.getAsJsonArray("data");
+
+        if (resultados == null || resultados.size() == 0) {
+            throw new IOException("No se encontraron películas");
+        }
+
+
+        JsonObject peliculaMasAntigua = resultados.get(0).getAsJsonObject();
+
+
+        String nombrePelicula = peliculaMasAntigua.has("name") ? peliculaMasAntigua.get("name").getAsString() : "Desconocido";
+        String posterUrl = peliculaMasAntigua.has("image_url") ? peliculaMasAntigua.get("image_url").getAsString() : "No disponible";
+
+
+        return posterUrl;
+    }
+
+
 
 
     public void obtenerPrimerEpisodioTemporadaTres(String nombreSerie) throws IOException, InterruptedException {
@@ -178,10 +215,8 @@ public class TVDBCliente {
     }
 
 
-    // Método para obtener el nombre del actor que interpretó a Goku y su filmografía
-
     public void obtenerActorGokuDragonballEvolution() throws IOException, InterruptedException {
-        // 1️⃣ Buscar la película en TheTVDB
+        //Buscar la película en TheTVDB
         String url = "https://api4.thetvdb.com/v4/search?query=Dragon%20Ball%20Evolution&type=movie";
 
         HttpRequest solicitud = HttpRequest.newBuilder()
@@ -196,7 +231,7 @@ public class TVDBCliente {
             throw new IOException("Error en la API, código de estado: " + respuesta.statusCode());
         }
 
-        // 2️⃣ Parsear la respuesta JSON
+
         JsonObject jsonRespuesta = JsonParser.parseString(respuesta.body()).getAsJsonObject();
         JsonArray resultados = jsonRespuesta.getAsJsonArray("data");
 
@@ -207,7 +242,7 @@ public class TVDBCliente {
         JsonObject pelicula = resultados.get(0).getAsJsonObject();
         String tmdbId = null;
 
-        // Buscar TheMovieDB ID en remote_ids
+
         JsonArray remoteIds = pelicula.getAsJsonArray("remote_ids");
         for (JsonElement elem : remoteIds) {
             JsonObject remote = elem.getAsJsonObject();
@@ -221,7 +256,7 @@ public class TVDBCliente {
             throw new IOException("No se encontró el ID de TheMovieDB para Dragonball Evolution.");
         }
 
-        // 3️⃣ Obtener el reparto de la película desde TheMovieDB
+
         String apiKeyTMDB = "TU_API_KEY_TMDB"; // Reemplaza con tu API Key de TheMovieDB
         String urlActores = "https://api.themoviedb.org/3/movie/" + tmdbId + "/credits?api_key=" + apiKeyTMDB + "&language=es";
 
@@ -242,7 +277,7 @@ public class TVDBCliente {
         String nombreActorGoku = "Desconocido";
         String actorId = null;
 
-        // 4️⃣ Buscar al actor que interpretó a Goku
+
         for (JsonElement elem : cast) {
             JsonObject actor = elem.getAsJsonObject();
             if (actor.has("character") && actor.get("character").getAsString().equalsIgnoreCase("Goku")) {
@@ -256,7 +291,7 @@ public class TVDBCliente {
             throw new IOException("No se encontró el actor que interpretó a Goku en Dragonball Evolution.");
         }
 
-        // 5️⃣ Obtener la cantidad de películas y series en las que ha participado el actor
+
         String urlFilmografia = "https://api.themoviedb.org/3/person/" + actorId + "/combined_credits?api_key=" + apiKeyTMDB;
 
         HttpRequest solicitudFilmografia = HttpRequest.newBuilder()
@@ -275,7 +310,7 @@ public class TVDBCliente {
 
         int cantidadProyectos = filmografia.size();
 
-        // 6️⃣ Mostrar la información obtenida
+
         System.out.println("🎬 Película: Dragonball Evolution (2009)");
         System.out.println("🧑 Actor que interpretó a Goku: " + nombreActorGoku);
         System.out.println("📽️ Cantidad de películas y series en las que ha participado: " + cantidadProyectos);
@@ -285,7 +320,7 @@ public class TVDBCliente {
 
 
     public static void main(String[] args) {
-      /* Primer ejercicio
+       /*Primer ejercicio
         TVDBCliente cliente = new TVDBCliente();
         try {
 
@@ -295,16 +330,16 @@ public class TVDBCliente {
             System.err.println("Error: " + e.getMessage());
         }*/
 
-        /* Segundo ejercicio
+        /*Segundo ejercicio
         TVDBCliente cliente = new TVDBCliente();
         try {
-            String posterUrl = cliente.obtenerPosterSerieMasAntigua(1986);
-            System.out.println(posterUrl);
+            String posterUrl = cliente.obtenerPosterPeliculaMasAntigua();
+            System.out.println("URL del póster: " + posterUrl);
         } catch (IOException | InterruptedException e) {
             System.err.println("Error: " + e.getMessage());
         }*/
 
-        /* Tercer ejercicio use the big bang theory porque Saga del Ejército de la Patrulla Roja no existe
+        /*Tercer ejercicio use the big bang theory porque Saga del Ejército de la Patrulla Roja no existe
         TVDBCliente cliente = new TVDBCliente();
         try {
             // Solo pasamos el nombre de la serie, el método se encarga del resto
