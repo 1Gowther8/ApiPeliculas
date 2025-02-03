@@ -214,10 +214,9 @@ public class TVDBCliente {
         System.out.println("Descripción: " + descripcion);
     }
 
-
-    public void obtenerActorGokuDragonballEvolution() throws IOException, InterruptedException {
-        //Buscar la película en TheTVDB
-        String url = "https://api4.thetvdb.com/v4/search?query=Dragon%20Ball%20Evolution&type=movie";
+    public int obtenerIdPeliculaPorNombre(String nombrePelicula) throws IOException, InterruptedException {
+        String queryCodificada = URLEncoder.encode(nombrePelicula, StandardCharsets.UTF_8);
+        String url = "https://api4.thetvdb.com/v4/search?query=" + queryCodificada + "&type=movie";
 
         HttpRequest solicitud = HttpRequest.newBuilder()
                 .uri(URI.create(url))
@@ -231,90 +230,195 @@ public class TVDBCliente {
             throw new IOException("Error en la API, código de estado: " + respuesta.statusCode());
         }
 
+        JsonObject jsonRespuesta = JsonParser.parseString(respuesta.body()).getAsJsonObject();
+
+        if (!jsonRespuesta.has("data") || jsonRespuesta.getAsJsonArray("data").size() == 0) {
+            throw new IOException("No se encontraron resultados para la película: " + nombrePelicula);
+        }
+
+        JsonArray resultados = jsonRespuesta.getAsJsonArray("data");
+        JsonObject pelicula = resultados.get(0).getAsJsonObject(); // Tomamos el primer resultado
+
+        if (!pelicula.has("tvdb_id")) {
+            throw new IOException("No se encontró un ID para la película: " + nombrePelicula);
+        }
+
+        int idPelicula = pelicula.get("tvdb_id").getAsInt();
+        System.out.println("ID de la película '" + nombrePelicula + "': " + idPelicula);
+
+        return idPelicula;
+    }
+
+
+    public int obtenerPeopleIdDeGoku(int movieId) throws IOException, InterruptedException {
+        String url = "https://api4.thetvdb.com/v4/movies/" + movieId + "/extended?meta=translations";
+
+        HttpRequest solicitud = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Authorization", "Bearer " + API_KEY)
+                .header("Accept", "application/json")
+                .build();
+
+        HttpResponse<String> respuesta = cliente.send(solicitud, HttpResponse.BodyHandlers.ofString());
+
+        if (respuesta.statusCode() != 200) {
+            throw new IOException("Error en la API, código de estado: " + respuesta.statusCode());
+        }
 
         JsonObject jsonRespuesta = JsonParser.parseString(respuesta.body()).getAsJsonObject();
-        JsonArray resultados = jsonRespuesta.getAsJsonArray("data");
 
-        if (resultados.size() == 0) {
-            throw new IOException("No se encontró la película Dragonball Evolution.");
+        if (!jsonRespuesta.has("data")) {
+            throw new IOException("No se encontró información de la película con ID: " + movieId);
         }
 
-        JsonObject pelicula = resultados.get(0).getAsJsonObject();
-        String tmdbId = null;
+        JsonObject data = jsonRespuesta.getAsJsonObject("data");
 
+        if (!data.has("characters")) {
+            throw new IOException("No se encontraron personajes en la película con ID: " + movieId);
+        }
 
-        JsonArray remoteIds = pelicula.getAsJsonArray("remote_ids");
-        for (JsonElement elem : remoteIds) {
-            JsonObject remote = elem.getAsJsonObject();
-            if (remote.has("sourceName") && remote.get("sourceName").getAsString().equals("TheMovieDB.com")) {
-                tmdbId = remote.get("id").getAsString();
-                break;
+        JsonArray personajes = data.getAsJsonArray("characters");
+
+        for (JsonElement personajeElem : personajes) {
+            JsonObject personaje = personajeElem.getAsJsonObject();
+            if (personaje.has("name") && "Goku".equals(personaje.get("name").getAsString())) {
+                if (personaje.has("peopleId")) {
+                    return personaje.get("peopleId").getAsInt();
+                } else {
+                    throw new IOException("No se encontró el 'peopleId' para el personaje Goku.");
+                }
             }
         }
 
-        if (tmdbId == null) {
-            throw new IOException("No se encontró el ID de TheMovieDB para Dragonball Evolution.");
-        }
-
-
-        String apiKeyTMDB = "TU_API_KEY_TMDB"; // Reemplaza con tu API Key de TheMovieDB
-        String urlActores = "https://api.themoviedb.org/3/movie/" + tmdbId + "/credits?api_key=" + apiKeyTMDB + "&language=es";
-
-        HttpRequest solicitudActores = HttpRequest.newBuilder()
-                .uri(URI.create(urlActores))
-                .header("Accept", "application/json")
-                .build();
-
-        HttpResponse<String> respuestaActores = cliente.send(solicitudActores, HttpResponse.BodyHandlers.ofString());
-
-        if (respuestaActores.statusCode() != 200) {
-            throw new IOException("Error al obtener los actores, código de estado: " + respuestaActores.statusCode());
-        }
-
-        JsonObject jsonActores = JsonParser.parseString(respuestaActores.body()).getAsJsonObject();
-        JsonArray cast = jsonActores.getAsJsonArray("cast");
-
-        String nombreActorGoku = "Desconocido";
-        String actorId = null;
-
-
-        for (JsonElement elem : cast) {
-            JsonObject actor = elem.getAsJsonObject();
-            if (actor.has("character") && actor.get("character").getAsString().equalsIgnoreCase("Goku")) {
-                nombreActorGoku = actor.get("name").getAsString();
-                actorId = actor.get("id").getAsString();
-                break;
-            }
-        }
-
-        if (actorId == null) {
-            throw new IOException("No se encontró el actor que interpretó a Goku en Dragonball Evolution.");
-        }
-
-
-        String urlFilmografia = "https://api.themoviedb.org/3/person/" + actorId + "/combined_credits?api_key=" + apiKeyTMDB;
-
-        HttpRequest solicitudFilmografia = HttpRequest.newBuilder()
-                .uri(URI.create(urlFilmografia))
-                .header("Accept", "application/json")
-                .build();
-
-        HttpResponse<String> respuestaFilmografia = cliente.send(solicitudFilmografia, HttpResponse.BodyHandlers.ofString());
-
-        if (respuestaFilmografia.statusCode() != 200) {
-            throw new IOException("Error al obtener la filmografía del actor, código de estado: " + respuestaFilmografia.statusCode());
-        }
-
-        JsonObject jsonFilmografia = JsonParser.parseString(respuestaFilmografia.body()).getAsJsonObject();
-        JsonArray filmografia = jsonFilmografia.getAsJsonArray("cast");
-
-        int cantidadProyectos = filmografia.size();
-
-
-        System.out.println("🎬 Película: Dragonball Evolution (2009)");
-        System.out.println("🧑 Actor que interpretó a Goku: " + nombreActorGoku);
-        System.out.println("📽️ Cantidad de películas y series en las que ha participado: " + cantidadProyectos);
+        throw new IOException("No se encontró el personaje Goku en la película.");
     }
+
+    public void obtenerInfoActorGoku(int peopleId) throws IOException, InterruptedException {
+        String url = "https://api4.thetvdb.com/v4/people/" + peopleId + "/extended?meta=translations";
+
+        HttpRequest solicitud = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Authorization", "Bearer " + API_KEY)
+                .header("Accept", "application/json")
+                .build();
+
+        HttpResponse<String> respuesta = cliente.send(solicitud, HttpResponse.BodyHandlers.ofString());
+
+        if (respuesta.statusCode() != 200) {
+            throw new IOException("Error en la API, código de estado: " + respuesta.statusCode());
+        }
+
+        JsonObject jsonRespuesta = JsonParser.parseString(respuesta.body()).getAsJsonObject();
+
+        if (!jsonRespuesta.has("data")) {
+            throw new IOException("No se encontró información para el ID: " + peopleId);
+        }
+
+        JsonObject data = jsonRespuesta.getAsJsonObject("data");
+
+        // Obtener el nombre del actor
+        String nombreActor = data.has("name") ? data.get("name").getAsString() : "Desconocido";
+
+        // Contar la cantidad de participaciones en películas y series
+        if (!data.has("characters")) {
+            throw new IOException("No se encontraron participaciones para el actor con ID: " + peopleId);
+        }
+
+        JsonArray personajes = data.getAsJsonArray("characters");
+
+        int cantidadPeliculas = 0;
+        int cantidadSeries = 0;
+
+        for (JsonElement personajeElem : personajes) {
+            JsonObject personaje = personajeElem.getAsJsonObject();
+            if (personaje.has("movie") && !personaje.get("movie").isJsonNull()) {
+                cantidadPeliculas++;
+            }
+            if (personaje.has("series") && !personaje.get("series").isJsonNull()) {
+                cantidadSeries++;
+            }
+        }
+
+        // Imprimir resultados
+        System.out.println("Actor que interpretó a Goku en Dragonball Evolution (2009): " + nombreActor);
+        System.out.println("Ha participado en " + cantidadPeliculas + " películas y " + cantidadSeries + " series.");
+    }
+
+
+    public String obtenerAnioPelicula(String nombrePelicula) throws IOException, InterruptedException {
+        String queryCodificada = URLEncoder.encode(nombrePelicula, StandardCharsets.UTF_8);
+        String url = "https://api4.thetvdb.com/v4/search?query=" + queryCodificada + "&type=movie";
+
+        HttpRequest solicitud = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Authorization", "Bearer " + API_KEY)
+                .header("Accept", "application/json")
+                .build();
+
+        HttpResponse<String> respuesta = cliente.send(solicitud, HttpResponse.BodyHandlers.ofString());
+
+        if (respuesta.statusCode() != 200) {
+            throw new IOException("Error en la API, código de estado: " + respuesta.statusCode());
+        }
+
+        JsonObject jsonRespuesta = JsonParser.parseString(respuesta.body()).getAsJsonObject();
+
+        if (!jsonRespuesta.has("data") || jsonRespuesta.getAsJsonArray("data").size() == 0) {
+            throw new IOException("No se encontraron resultados para la película: " + nombrePelicula);
+        }
+
+        JsonArray resultados = jsonRespuesta.getAsJsonArray("data");
+        JsonObject pelicula = resultados.get(0).getAsJsonObject(); // Tomamos el primer resultado
+
+        if (!pelicula.has("year")) {
+            throw new IOException("No se encontró el año para la película: " + nombrePelicula);
+        }
+
+        String anioPelicula = pelicula.get("year").getAsString();
+        System.out.println("Año de la película '" + nombrePelicula + "': " + anioPelicula);
+
+        return anioPelicula;
+    }
+    public void obtenerMejorPeliculaPorAnio(int anio) throws IOException, InterruptedException {
+        String url = "https://api4.thetvdb.com/v4/movies/filter?country=usa&lang=eng&sort=score&year=" + anio;
+
+        HttpRequest solicitud = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Authorization", "Bearer " + API_KEY)
+                .header("Accept", "application/json")
+                .build();
+
+        HttpResponse<String> respuesta = cliente.send(solicitud, HttpResponse.BodyHandlers.ofString());
+
+        if (respuesta.statusCode() != 200) {
+            throw new IOException("Error en la API, código de estado: " + respuesta.statusCode());
+        }
+
+        JsonObject jsonRespuesta = JsonParser.parseString(respuesta.body()).getAsJsonObject();
+
+        if (!jsonRespuesta.has("data") || jsonRespuesta.getAsJsonArray("data").size() == 0) {
+            throw new IOException("No se encontraron películas para el año: " + anio);
+        }
+
+        JsonArray peliculas = jsonRespuesta.getAsJsonArray("data");
+        JsonObject mejorPelicula = peliculas.get(0).getAsJsonObject(); // Tomamos la primera, ya que están ordenadas por score
+
+        String nombrePelicula = mejorPelicula.has("name") ? mejorPelicula.get("name").getAsString() : "Desconocido";
+        double score = mejorPelicula.has("score") ? mejorPelicula.get("score").getAsDouble() : 0.0;
+        String imagen = mejorPelicula.has("image") ? mejorPelicula.get("image").getAsString() : "No disponible";
+
+        System.out.println("Mejor película de USA en " + anio + ": " + nombrePelicula);
+        System.out.println("Puntuación: " + score);
+
+    }
+
+
+
+
+
+
+
+
 
 
 
@@ -352,11 +456,25 @@ public class TVDBCliente {
 
         TVDBCliente cliente = new TVDBCliente();
         try {
-            cliente.obtenerActorGokuDragonballEvolution();
+           Integer idPelicula=  cliente.obtenerIdPeliculaPorNombre("Dragon Ball Evolution");
+           Integer idActor=cliente.obtenerPeopleIdDeGoku(idPelicula);
+           cliente.obtenerInfoActorGoku(idActor);
+
+
         } catch (IOException | InterruptedException e) {
             System.err.println("Error: " + e.getMessage());
         }*/
 
+        /*Quinto ejercicio
+        TVDBCliente cliente = new TVDBCliente();
+        try {
+            String anhoPelicula=  cliente.obtenerAnioPelicula("La guerra de los mundos");
+            cliente.obtenerMejorPeliculaPorAnio(Integer.parseInt(anhoPelicula));
+
+
+        } catch (IOException | InterruptedException e) {
+            System.err.println("Error: " + e.getMessage());
+        }*/
     }
 }
 
